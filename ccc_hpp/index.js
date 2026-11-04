@@ -3,6 +3,8 @@
 const CONFIG = {
   environmentId: '',
   currencyCode: 'USD',
+  /* Initial payment amount. */
+  defaultAmount: 100,
   /* Note field visibility: 'create-only', 'always' or 'never'. Booleans are deprecated and not supported here. */
   showNoteField: 'never',
   apiUrl: '',
@@ -62,6 +64,103 @@ const buildGatewayOptions = (data) => {
   return options;
 };
 
+/* Styling panel. Variables come from the HPP "CSS Variables" docs; defaults are only shown as hints, a variable is
+   emitted into customStyles only once the user changes it. Entries with several vars set them all to one value. */
+const COLOR_CONTROLS = [
+  { vars: ['--pui-button-enabled'], label: 'Button', def: '#4dbdff' },
+  { vars: ['--pui-button-enabled-hover'], label: 'Button hover', def: '#45b2f3' },
+  { vars: ['--pui-button-enabled-active'], label: 'Button pressed', def: '#3da7e6' },
+  { vars: ['--pui-button-color'], label: 'Button text', def: '#ffffff' },
+  { vars: ['--pui-button-enabled-success'], label: 'Success button', def: '#5cd755' },
+  { vars: ['--pui-main-text'], label: 'Text', def: '#000000' },
+  { vars: ['--pui-titles'], label: 'Titles', def: '#000000' },
+  { vars: ['--pui-label-color'], label: 'Field labels', def: '#000000' },
+  { vars: ['--pui-general-form-background'], label: 'Form background', def: '#f7f7f7' },
+  { vars: ['--pui-input-borders'], label: 'Input border', def: '#d3dbe4' },
+  { vars: ['--pui-selected-input-border', '--pui-selected-input-outline', '--pui-selected-item-border'], label: 'Focus / selected', def: '#219fef' },
+  { vars: ['--pui-error-message', '--pui-error-border'], label: 'Error', def: '#ff0000' },
+  { vars: ['--pui-checkbox-background-color'], label: 'Checkbox', def: '#219fef' },
+];
+const SIZE_CONTROLS = [
+  { vars: ['--pui-inputs-border-radius'], label: 'Input radius', unit: 'px', def: 0, min: 0, max: 30, step: 1 },
+  { vars: ['--pui-button-border-radius'], label: 'Button radius', unit: 'px', def: 3, min: 0, max: 30, step: 1 },
+  { vars: ['--pui-payment-method-border-radius'], label: 'Payment method radius', unit: 'px', def: 0, min: 0, max: 30, step: 1 },
+  { vars: ['--pui-input-height'], label: 'Input height', unit: 'rem', def: 2.2, min: 1, max: 5, step: 0.1 },
+  { vars: ['--pui-button-height'], label: 'Button height', unit: 'rem', def: 2.2, min: 1, max: 5, step: 0.1 },
+  { vars: ['--pui-input-font-size'], label: 'Input font size', unit: 'rem', def: 0.85, min: 0.5, max: 2, step: 0.05 },
+  { vars: ['--pui-label-font-size'], label: 'Label font size', unit: 'rem', def: 0.75, min: 0.5, max: 2, step: 0.05 },
+  { vars: ['--pui-form-row-gap'], label: 'Row spacing', unit: 'rem', def: 0.6, min: 0, max: 3, step: 0.1 },
+];
+const DEFAULT_STYLE = { vars: {}, fontFamily: '', fontGoogle: true, hideTitle: true, titleLabel: '', payLabel: '', scaleRatio: '', containerWidth: '', maxContainerWidth: '', customCss: '', cssLink: '' };
+
+/* Turns the style state into the renderPaymentForm options it represents (only non-default values). */
+const buildStyleProps = (st) => {
+  const props = {};
+  if (st.hideTitle) props.hideTitle = true;
+  const labels = {};
+  if (st.titleLabel.trim()) labels.title = st.titleLabel.trim();
+  if (st.payLabel.trim()) labels.payButton = st.payLabel.trim();
+  if (Object.keys(labels).length) props.labels = labels;
+  const font = st.fontFamily.replace(/['"`;{}\\<>]/g, '').trim();
+  const fontEntry = font ? [
+    st.fontGoogle ? "@import url('https://fonts.googleapis.com/css2?family=" + encodeURIComponent(font).replace(/%20/g, '+') + ":wght@400;500;600&display=swap');" : '',
+    "* { font-family: '" + font + "', sans-serif !important; }",
+    ":root { --pui-payment-method-slot-button-font-family: '" + font + "', sans-serif; }",
+  ].filter(Boolean).join('\n') : '';
+  const decls = Object.keys(st.vars).map((k) => '  ' + k + ': ' + st.vars[k] + ';');
+  const customStyles = [];
+  if (fontEntry) customStyles.push({ type: 'plain', value: fontEntry });
+  if (decls.length) customStyles.push({ type: 'plain', value: ':root {\n' + decls.join('\n') + '\n}' });
+  if (st.customCss.trim()) customStyles.push({ type: 'plain', value: st.customCss.trim() });
+  if (st.cssLink.trim()) customStyles.push({ type: 'link', value: st.cssLink.trim() });
+  if (customStyles.length) props.customStyles = customStyles;
+  const ratio = Number(st.scaleRatio);
+  if (st.scaleRatio !== '' && ratio >= 0.5 && ratio <= 2) props.scaleRatio = ratio;
+  if (st.containerWidth.trim()) props.containerWidth = st.containerWidth.trim();
+  if (st.maxContainerWidth.trim()) props.maxContainerWidth = st.maxContainerWidth.trim();
+  return props;
+};
+
+/* Minimal JS-literal serializer so the exported code reads like hand-written code (unquoted keys, template literals for CSS). */
+const RAW = (code) => ({ raw: code });
+const jsString = (v) => (v.indexOf('\n') >= 0
+  ? '`' + v.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${') + '`'
+  : "'" + v.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'");
+const toJs = (v, depth) => {
+  const pad = '  '.repeat(depth);
+  if (v && v.raw !== undefined) return v.raw;
+  if (typeof v === 'string') return jsString(v);
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (Array.isArray(v)) return v.length ? '[\n' + v.map((x) => pad + '  ' + toJs(x, depth + 1)).join(',\n') + ',\n' + pad + ']' : '[]';
+  const keys = Object.keys(v);
+  if (!keys.length) return '{}';
+  return '{\n' + keys.map((k) => pad + '  ' + (/^[A-Za-z_$][\w$]*$/.test(k) ? k : "'" + k + "'") + ': ' + toJs(v[k], depth + 1)).join(',\n') + ',\n' + pad + '}';
+};
+
+const copyText = async (text) => {
+  try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* fall back below: iframes often lack clipboard permission */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.append(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch (e) { return false; }
+};
+
+const downloadText = (name, text) => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/javascript' }));
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+};
+
 const CONTAINER_ID = 'ccc-hpp-container';
 
 /* The token call must stay same-origin (BP itself, or the harness proxy); only the HPP library's own API calls use CONFIG.apiUrl. */
@@ -107,18 +206,23 @@ const CccHpp = ({ _widgetProps }) => {
   const saved = React.useMemo(readSaved, []);
   const initialProfile = saved.profileId || BPUI.Tools.getNodeKey() || '';
   const [profileId, setProfileId] = React.useState(String(initialProfile));
-  const [amount, setAmount] = React.useState('');
+  const [amount, setAmount] = React.useState(String(CONFIG.defaultAmount));
   const [gatewayKey, setGatewayKey] = React.useState(saved.gatewayKey || '');
   const [gateways, setGateways] = React.useState({ loading: true, options: [] });
   const [environmentId, setEnvironmentId] = React.useState(saved.environmentId || CONFIG.environmentId);
   const [currencyCode, setCurrencyCode] = React.useState(saved.currencyCode || CONFIG.currencyCode);
   const [showNote, setShowNote] = React.useState(noteMode(saved.showNoteField || CONFIG.showNoteField));
+  const [style, setStyle] = React.useState(Object.assign({}, DEFAULT_STYLE, saved.style, { vars: Object.assign({}, saved.style && saved.style.vars) }));
+  const [autoApply, setAutoApply] = React.useState(saved.autoApply !== false);
+  const [styleOpen, setStyleOpen] = React.useState(saved.styleOpen !== false);
+  const [exportTab, setExportTab] = React.useState('style');
+  const [copied, setCopied] = React.useState('');
   const [request, setRequest] = React.useState(null);
   const [status, setStatus] = React.useState({ phase: 'idle' });
 
   React.useEffect(() => {
-    writeSaved({ profileId, gatewayKey, environmentId, currencyCode, showNoteField: showNote });
-  }, [profileId, gatewayKey, environmentId, currencyCode, showNote]);
+    writeSaved({ profileId, gatewayKey, environmentId, currencyCode, showNoteField: showNote, style, autoApply, styleOpen });
+  }, [profileId, gatewayKey, environmentId, currencyCode, showNote, style, autoApply, styleOpen]);
 
   const resetSaved = () => {
     clearSaved();
@@ -154,7 +258,7 @@ const CccHpp = ({ _widgetProps }) => {
         await loadHppScript();
         const securityToken = await getHppSecurityToken();
         if (!active) return;
-        const sdk = HostedPayments.renderPaymentForm({
+        HostedPayments.renderPaymentForm(Object.assign({
           securityToken,
           environmentId: request.environmentId,
           currencyCode: request.currencyCode,
@@ -162,16 +266,11 @@ const CccHpp = ({ _widgetProps }) => {
           billingProfileId: request.profileId,
           targetSelector: '#' + CONTAINER_ID,
           amount: request.amount,
-          hideTitle: true,
           showNoteField: noteMode(request.showNoteField),
-          errorPlacementStrategy: 'none',
           paymentGateways: request.gateways,
-        }, {
+        }, request.style), {
           captureCompleted: (r) => set(r && r.isSuccess ? { phase: 'success', paymentId: r.paymentId, amount: r.amount } : { phase: 'error', message: errorText(r) }),
         });
-        if (sdk && typeof sdk.subscribe === 'function') {
-          sdk.subscribe(['error'], (s) => { if (s && s.error) set({ phase: 'error', message: errorText(s.error) }); });
-        }
         set({ phase: 'ready' });
       } catch (e) {
         set({ phase: 'error', message: e.message });
@@ -180,14 +279,65 @@ const CccHpp = ({ _widgetProps }) => {
     return () => { active = false; container.innerHTML = ''; };
   }, [request]);
 
+  const styleProps = React.useMemo(() => buildStyleProps(style), [style]);
+  const styleJson = JSON.stringify(styleProps);
+
+  /* The SDK has no style-update call, so a style change re-renders the form (new token, typed card data is lost). */
+  React.useEffect(() => {
+    if (!request || !autoApply) return undefined;
+    const t = setTimeout(() => {
+      setRequest((r) => (r && JSON.stringify(r.style) !== styleJson ? Object.assign({}, r, { style: styleProps, n: Date.now() }) : r));
+    }, 700);
+    return () => clearTimeout(t);
+  }, [styleJson, autoApply]);
+
   const amountNum = Number(amount);
   const selected = gateways.options.find((o) => o.key === gatewayKey);
   const problem = !profileId.trim() ? 'Enter a Billing Profile Id.' : !(amountNum > 0) ? 'Enter an amount greater than 0.' : !selected ? 'No active payment gateway is selected.' : !environmentId.trim() ? 'Enter the Environment Id.' : '';
 
+  const setVars = (vars, value) => setStyle((st) => {
+    const next = Object.assign({}, st.vars);
+    vars.forEach((v) => { if (value === '') delete next[v]; else next[v] = value; });
+    return Object.assign({}, st, { vars: next });
+  });
+  const setField = (key) => (value) => setStyle((st) => Object.assign({}, st, { [key]: value }));
+
+  const exportText = (() => {
+    if (exportTab === 'style') {
+      const keys = Object.keys(styleProps);
+      return '// Add these options to your HostedPayments.renderPaymentForm({ ... }) config.\n' + (keys.length ? keys.map((k) => '  ' + k + ': ' + toJs(styleProps[k], 1) + ',').join('\n') : '// (no style changes yet)');
+    }
+    const cfg = {
+      securityToken: RAW('securityToken'),
+      environmentId: environmentId.trim(),
+      currencyCode: (selected && selected.currency) || currencyCode.trim() || 'USD',
+      apiUrl: RAW('HPP_API_URL'),
+      billingProfileId: profileId.trim(),
+      paymentGateways: selected ? selected.gateways : {},
+      amount: amountNum > 0 ? amountNum : 0,
+      targetSelector: '#payment-container',
+      showNoteField: noteMode(showNote),
+    };
+    Object.assign(cfg, styleProps);
+    return [
+      '// Load https://cdn.aws.billingplatform.com/hosted-payments-ui@release/lib.js first, and fetch a fresh securityToken per render.',
+      "// In a BP widget: window.location.origin + '/' + BPSystem.organization + '/hostedPayments/1.0'. Elsewhere: https://<host>/<org>/hostedPayments/1.0",
+      "const HPP_API_URL = window.location.origin + '/' + BPSystem.organization + '/hostedPayments/1.0';",
+      '',
+      'HostedPayments.renderPaymentForm(' + toJs(cfg, 0) + ', {\n  captureCompleted: (result) => console.log(result),\n});',
+    ].join('\n');
+  })();
+
+  const doCopy = async () => {
+    const ok = await copyText(exportText);
+    setCopied(ok ? 'Copied' : 'Copy failed - select the text and copy it manually');
+    setTimeout(() => setCopied(''), 2500);
+  };
+
   const submit = (e) => {
     e.preventDefault();
     if (problem) { setStatus({ phase: 'error', message: problem }); return; }
-    setRequest({ profileId: profileId.trim(), amount: amountNum, gateways: selected.gateways, environmentId: environmentId.trim(), currencyCode: selected.currency || currencyCode.trim() || 'USD', showNoteField: showNote, n: Date.now() });
+    setRequest({ profileId: profileId.trim(), amount: amountNum, gateways: selected.gateways, environmentId: environmentId.trim(), currencyCode: selected.currency || currencyCode.trim() || 'USD', showNoteField: showNote, style: styleProps, n: Date.now() });
   };
 
   const field = (label, value, set, extra) => (
@@ -197,39 +347,137 @@ const CccHpp = ({ _widgetProps }) => {
     </label>
   );
 
+  const stylePanel = (
+    <details className="hpp-panel hpp-style" open={styleOpen} onToggle={(e) => setStyleOpen(e.currentTarget.open)}>
+      <summary className="hpp-panel-title">Style</summary>
+      <div className="hpp-panel-body">
+      <label className="hpp-check">
+        <input type="checkbox" checked={autoApply} onChange={(e) => setAutoApply(e.target.checked)} />
+        Re-render the form automatically when styles change
+      </label>
+      <div className="hpp-grid">
+      <div className="hpp-group hpp-group-tall">
+      <h4 className="hpp-h">Colors</h4>
+      {COLOR_CONTROLS.map((c) => {
+        const cur = style.vars[c.vars[0]];
+        return (
+          <div className="hpp-ctl" key={c.vars[0]}>
+            <span className="hpp-label">{c.label}</span>
+            <span className="hpp-ctlr">
+              <input type="color" className="hpp-color" value={cur || c.def} onChange={(e) => setVars(c.vars, e.target.value)} />
+              <code className="hpp-code">{cur || 'default'}</code>
+              <button type="button" className="hpp-link" disabled={!cur} onClick={() => setVars(c.vars, '')}>reset</button>
+            </span>
+          </div>
+        );
+      })}
+      </div>
+      <div className="hpp-group">
+      <h4 className="hpp-h">Shape and size</h4>
+      {SIZE_CONTROLS.map((c) => {
+        const cur = style.vars[c.vars[0]];
+        return (
+          <div className="hpp-ctl" key={c.vars[0]}>
+            <span className="hpp-label">{c.label} ({c.unit})</span>
+            <span className="hpp-ctlr">
+              <input type="number" className="hpp-input hpp-num" min={c.min} max={c.max} step={c.step} placeholder={String(c.def)}
+                value={cur ? parseFloat(cur) : ''} onChange={(e) => setVars(c.vars, e.target.value === '' ? '' : e.target.value + c.unit)} />
+              <button type="button" className="hpp-link" disabled={!cur} onClick={() => setVars(c.vars, '')}>reset</button>
+            </span>
+          </div>
+        );
+      })}
+      </div>
+      <div className="hpp-group">
+      <h4 className="hpp-h">Text and layout</h4>
+      <label className="hpp-check">
+        <input type="checkbox" checked={style.hideTitle} onChange={(e) => setField('hideTitle')(e.target.checked)} />
+        Hide the form title
+      </label>
+      {field('Font family (optional)', style.fontFamily, setField('fontFamily'), { placeholder: 'Inter' })}
+      <label className="hpp-check">
+        <input type="checkbox" checked={style.fontGoogle} onChange={(e) => setField('fontGoogle')(e.target.checked)} />
+        Load it from Google Fonts (untick for system or self-hosted fonts)
+      </label>
+      {field('Title text (when shown)', style.titleLabel, setField('titleLabel'), { placeholder: 'Payment Details' })}
+      {field('Pay button text', style.payLabel, setField('payLabel'), { placeholder: 'Pay' })}
+      {field('Scale ratio (0.5 to 2)', style.scaleRatio, setField('scaleRatio'), { placeholder: '1', inputMode: 'decimal' })}
+      {field('Container width', style.containerWidth, setField('containerWidth'), { placeholder: '100% or 450px' })}
+      {field('Max container width', style.maxContainerWidth, setField('maxContainerWidth'), { placeholder: '480px' })}
+      </div>
+      <div className="hpp-group">
+      <h4 className="hpp-h">Custom CSS</h4>
+      <label className="hpp-field">
+        <span className="hpp-label">Extra rules (match classes by prefix, e.g. [class*="btnSubmit__"])</span>
+        <textarea className="hpp-input hpp-area" rows={4} value={style.customCss} placeholder={'[class*="btnSubmit__"] { text-transform: uppercase; }'}
+          onChange={(e) => setField('customCss')(e.target.value)} />
+      </label>
+      {field('External stylesheet URL (optional)', style.cssLink, setField('cssLink'), { placeholder: 'https://example.com/hpp.css' })}
+      <div className="hpp-muted">customStyles allows up to 5 entries; this panel uses at most 4.</div>
+      <button type="button" className="hpp-link" onClick={() => setStyle(Object.assign({}, DEFAULT_STYLE, { vars: {} }))}>Reset all styles</button>
+      </div>
+      <div className="hpp-group hpp-group-wide">
+      <h4 className="hpp-h">Export</h4>
+      <div className="hpp-tabs">
+        <button type="button" className={'hpp-tab' + (exportTab === 'style' ? ' on' : '')} onClick={() => setExportTab('style')}>Style options</button>
+        <button type="button" className={'hpp-tab' + (exportTab === 'full' ? ' on' : '')} onClick={() => setExportTab('full')}>Full render call</button>
+      </div>
+      <textarea className="hpp-input hpp-area hpp-export" readOnly rows={12} value={exportText} onFocus={(e) => e.target.select()} />
+      <div className="hpp-actions">
+        <button type="button" className="hpp-btn" onClick={doCopy}>Copy code</button>
+        <button type="button" className="hpp-btn hpp-btn-alt" onClick={() => downloadText(exportTab === 'style' ? 'hpp-style-options.js' : 'hpp-render.js', exportText)}>Download .js</button>
+        {copied && <span className="hpp-muted">{copied}</span>}
+      </div>
+      </div>
+      </div>
+      </div>
+    </details>
+  );
+
   return (
-    <div className="hpp-card">
-      <h3 className="hpp-title">Make a payment</h3>
-      <form className="hpp-form" onSubmit={submit}>
-        {field('Billing Profile Id', profileId, setProfileId, { placeholder: 'e.g. 1001' })}
-        {field('Amount', amount, setAmount, { placeholder: '0.00', inputMode: 'decimal' })}
-        <label className="hpp-field">
-          <span className="hpp-label">Payment gateway</span>
-          <select className="hpp-input" value={gatewayKey} disabled={gateways.loading || !gateways.options.length} onChange={(e) => setGatewayKey(e.target.value)}>
-            {gateways.loading && <option value="">Loading gateways...</option>}
-            {!gateways.loading && !gateways.options.length && <option value="">No active gateways</option>}
-            {gateways.options.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-          </select>
-        </label>
-        {gateways.error && <div className="hpp-error">{gateways.error}</div>}
-        <details className="hpp-settings">
-          <summary>HPP settings</summary>
-          {field('Environment Id', environmentId, setEnvironmentId)}
-          {field('Fallback currency (used when the gateway profile has none)', currencyCode, setCurrencyCode)}
-          <label className="hpp-field">
-            <span className="hpp-label">Note field</span>
-            <select className="hpp-input" value={showNote} onChange={(e) => setShowNote(e.target.value)}>
-              {NOTE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </label>
-          <button type="button" className="hpp-link" onClick={resetSaved}>Reset to defaults</button>
-        </details>
-        <button type="submit" className="hpp-btn" disabled={status.phase === 'loading'}>{request ? 'Reload payment form' : 'Load payment form'}</button>
-      </form>
-      {status.phase === 'loading' && <div className="hpp-muted">Loading payment form...</div>}
-      {status.phase === 'error' && <div className="hpp-error">{status.message}</div>}
-      {status.phase === 'success' && <div className="hpp-success">Payment captured{status.paymentId ? ' (payment ' + status.paymentId + ')' : ''}.</div>}
-      <div id={CONTAINER_ID} className="hpp-container" />
+    <div className="hpp-layout">
+      <details className="hpp-panel" open>
+        <summary className="hpp-panel-title">Payment settings</summary>
+        <div className="hpp-panel-body">
+          <form id="ccc-hpp-form" className="hpp-form-row" onSubmit={submit}>
+            {field('Billing Profile Id', profileId, setProfileId, { placeholder: 'e.g. 1001' })}
+            {field('Amount', amount, setAmount, { placeholder: '0.00', inputMode: 'decimal' })}
+            <label className="hpp-field hpp-field-wide">
+              <span className="hpp-label">Payment gateway</span>
+              <select className="hpp-input" value={gatewayKey} disabled={gateways.loading || !gateways.options.length} onChange={(e) => setGatewayKey(e.target.value)}>
+                {gateways.loading && <option value="">Loading gateways...</option>}
+                {!gateways.loading && !gateways.options.length && <option value="">No active gateways</option>}
+                {gateways.options.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+              </select>
+            </label>
+            {field('Environment Id', environmentId, setEnvironmentId)}
+            {field('Fallback currency', currencyCode, setCurrencyCode, { title: 'Used when the selected gateway profile has no currency' })}
+            <label className="hpp-field">
+              <span className="hpp-label">Note field</span>
+              <select className="hpp-input" value={showNote} onChange={(e) => setShowNote(e.target.value)}>
+                {NOTE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </label>
+            <div className="hpp-form-actions">
+              <button type="button" className="hpp-link" onClick={resetSaved}>Reset to defaults</button>
+            </div>
+          </form>
+          {gateways.error && <div className="hpp-error">{gateways.error}</div>}
+        </div>
+      </details>
+      <div className={'hpp-main' + (styleOpen ? '' : ' hpp-main-collapsed')}>
+      {stylePanel}
+      <div className="hpp-card">
+        <div className="hpp-card-head">
+          <h3 className="hpp-title">Make a payment</h3>
+          <button type="submit" form="ccc-hpp-form" className="hpp-btn" disabled={status.phase === 'loading'}>{request ? 'Reload payment form' : 'Load payment form'}</button>
+        </div>
+        {status.phase === 'loading' && <div className="hpp-muted">Loading payment form...</div>}
+        {status.phase === 'error' && <div className="hpp-error">{status.message}</div>}
+        {status.phase === 'success' && <div className="hpp-success">Payment captured{status.paymentId ? ' (payment ' + status.paymentId + ')' : ''}.</div>}
+        <div id={CONTAINER_ID} className="hpp-container" />
+      </div>
+      </div>
     </div>
   );
 };

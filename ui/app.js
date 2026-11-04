@@ -233,7 +233,18 @@
     syncConnUi(); if (S.tab === 'deploy') renderPane();
   });
   $('modeSeg').addEventListener('click', (e) => { if (e.target.dataset.mode) setMode(e.target.dataset.mode); });
-  $('tabs').addEventListener('click', (e) => { if (e.target.dataset && e.target.dataset.tab) { S.tab = e.target.dataset.tab; renderPane(); } });
+  function setPanel(collapsed) {
+    document.querySelector('.stage').classList.toggle('panel-collapsed', collapsed);
+    const t = $('panelToggle');
+    t.setAttribute('aria-expanded', String(!collapsed));
+    t.innerHTML = collapsed ? '&uarr; Expand' : '&darr; Collapse';
+    t.title = collapsed ? 'Show the console panel' : 'Collapse the console panel';
+    store.set('panel', collapsed);
+  }
+  const panelCollapsed = () => document.querySelector('.stage').classList.contains('panel-collapsed');
+  $('panelToggle').addEventListener('click', () => setPanel(!panelCollapsed()));
+
+  $('tabs').addEventListener('click', (e) => { if (e.target.dataset && e.target.dataset.tab) { if (panelCollapsed()) setPanel(false); S.tab = e.target.dataset.tab; renderPane(); } });
   $('clearBtn').addEventListener('click', () => { S.logs = []; S.net = []; renderCounts(); renderPane(); });
   $('reloadBtn').addEventListener('click', loadFrame);
 
@@ -245,7 +256,19 @@
     if (ev.name === S.name) { await loadDetail(); renderPane(); loadFrame(); }
   };
 
+  function setRail(collapsed) {
+    document.querySelector('.layout').classList.toggle('rail-collapsed', collapsed);
+    const t = $('railToggle');
+    t.setAttribute('aria-expanded', String(!collapsed));
+    t.innerHTML = collapsed ? 'Panel &raquo;' : '&laquo; Panel';
+    t.title = collapsed ? 'Show the left panel' : 'Hide the left panel for more room';
+    store.set('rail', collapsed);
+  }
+  $('railToggle').addEventListener('click', () => setRail(!document.querySelector('.layout').classList.contains('rail-collapsed')));
+
   (async function init() {
+    setRail(!!store.get('rail', false));
+    setPanel(!!store.get('panel', false));
     const vp = store.get('vp', '100%'); $('viewport').value = vp; $('frameWrap').style.width = vp;
     await loadConn();
     await loadList(false);

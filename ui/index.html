@@ -8,6 +8,7 @@
 </head>
 <body>
   <header class="top">
+    <button id="railToggle" class="ghost" type="button" aria-controls="rail" aria-expanded="true" title="Hide the left panel for more room">&laquo; Panel</button>
     <strong class="brand">BP Widget Harness</strong>
     <select id="widgetSelect" aria-label="Widget"></select>
     <span id="kindBadge" class="badge"></span>
@@ -22,7 +23,7 @@
   <div id="writeBanner" class="banner" hidden></div>
 
   <main class="layout">
-    <aside class="rail">
+    <aside class="rail" id="rail">
       <section>
         <h3>Record context</h3>
         <label>nodeKey <input id="ctxKey" placeholder="record Id"></label>
@@ -97,6 +98,7 @@
           <button data-tab="deploy">Deploy to BP</button>
           <span class="grow"></span>
           <button id="clearBtn" class="ghost">Clear</button>
+          <button id="panelToggle" class="ghost" type="button" aria-controls="pane" aria-expanded="true" title="Collapse the console panel">&darr; Collapse</button>
           <button id="reloadBtn" class="ghost">Reload widget</button>
         </nav>
         <div id="pane" class="pane"></div>
