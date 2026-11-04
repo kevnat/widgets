@@ -1,0 +1,11 @@
+{
+  "kind": "LIST",
+  "version": "v2",
+  "entity": "INVOICE",
+  "interactive": false,
+  "inputParameters": [
+    { "parameter": "Status", "fieldReference": "Status" },
+    { "parameter": "DueDate", "fieldReference": "DueDate" }
+  ],
+  "description": "List widget: status badge rendered per row from input parameters only (no API calls)"
+}

@@ -1,0 +1,21 @@
+/* src/payments/extensions/LockboxFileReference/style.module.css */
+.ezkKqa_container {
+  flex-direction: column;
+  gap: 4px;
+  display: flex;
+}
+
+.ezkKqa_link {
+  color: var(--bp-link-color, #1890ff);
+  text-decoration: none;
+}
+
+.ezkKqa_link:hover {
+  text-decoration: underline;
+}
+
+.ezkKqa_secondary {
+  color: var(--bp-text-secondary, #666);
+  font-size: 12px;
+}
+

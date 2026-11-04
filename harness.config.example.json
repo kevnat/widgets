@@ -1,0 +1,5 @@
+{
+  "baseUrl": "https://your-host.billingplatform.com/your_org",
+  "username": "your.user@example.com",
+  "authType": "password"
+}

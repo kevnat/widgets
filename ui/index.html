@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BP Widget Harness</title>
+  <link rel="stylesheet" href="/ui/app.css">
+</head>
+<body>
+  <header class="top">
+    <strong class="brand">BP Widget Harness</strong>
+    <select id="widgetSelect" aria-label="Widget"></select>
+    <span id="kindBadge" class="badge"></span>
+    <span id="verBadge" class="badge"></span>
+    <span class="grow"></span>
+    <div class="seg" id="modeSeg" role="group" aria-label="Data source">
+      <button data-mode="mock" class="on">Mock data</button>
+      <button data-mode="live">Live BP</button>
+    </div>
+    <span id="connPill" class="pill off">not connected</span>
+  </header>
+  <div id="writeBanner" class="banner" hidden></div>
+
+  <main class="layout">
+    <aside class="rail">
+      <section>
+        <h3>Record context</h3>
+        <label>nodeKey <input id="ctxKey" placeholder="record Id"></label>
+        <label>nodeName / entity <input id="ctxNode" placeholder="Account"></label>
+        <label>Mode
+          <select id="ctxMode">
+            <option value="R">R - Detail (read)</option>
+            <option value="E">E - Edit</option>
+            <option value="N">N - New</option>
+            <option value="L">L - List</option>
+          </select>
+        </label>
+        <p class="hint">Remounts the widget. Leave nodeKey empty to test the "no record" path.</p>
+      </section>
+
+      <section>
+        <h3>Display</h3>
+        <label>Viewport
+          <select id="viewport">
+            <option value="100%">Fit panel</option>
+            <option value="1280px">Desktop 1280</option>
+            <option value="768px">Tablet 768</option>
+            <option value="375px">Mobile 375</option>
+          </select>
+        </label>
+        <label>Kind (override)
+          <select id="kindOverride"><option value="">as detected</option><option>EXTENSION</option><option>PAGE</option><option>LIST</option></select>
+        </label>
+        <label>Extension column span
+          <select id="colSpan"><option value="2">2 (full width, no label)</option><option value="1">1 (label shown)</option></select>
+        </label>
+        <label class="check"><input type="checkbox" id="rem10" checked> BP root font-size 10px (rem gotcha)</label>
+        <label class="check"><input type="checkbox" id="strict" checked> Strict BP behaviour (no auto re-render)</label>
+      </section>
+
+      <section id="connSection">
+        <h3>BillingPlatform connection</h3>
+        <label>Base URL <input id="cBase" placeholder="https://host/org_name" autocomplete="off"></label>
+        <label>Auth
+          <select id="cAuth">
+            <option value="password">Username + password</option>
+            <option value="session">Existing Session Id</option>
+            <option value="bearer">OAuth bearer token</option>
+          </select>
+        </label>
+        <div id="cPassword">
+          <label>Username <input id="cUser" autocomplete="off"></label>
+          <label>Password <input id="cPass" type="password" autocomplete="off" placeholder="or set BP_PASSWORD in env"></label>
+        </div>
+        <div id="cSession" hidden><label>Session Id <input id="cSid" type="password" autocomplete="off"></label></div>
+        <div id="cBearer" hidden><label>Access token <input id="cTok" type="password" autocomplete="off"></label></div>
+        <div class="row">
+          <button id="cConnect" class="primary">Connect</button>
+          <button id="cDisconnect" hidden>Disconnect</button>
+        </div>
+        <div id="cError" class="err" hidden></div>
+        <label class="check" id="writesRow" hidden><input type="checkbox" id="cWrites"> Allow writes (POST/PUT/PATCH/DELETE)</label>
+        <p class="hint">Credentials stay in the local server's memory only. Writes are blocked by default - the proxy returns 403 until you enable them.</p>
+      </section>
+    </aside>
+
+    <section class="stage">
+      <div class="canvas"><div id="frameWrap"><iframe id="frame" title="Widget preview"></iframe></div></div>
+
+      <div class="panel">
+        <nav class="tabs" id="tabs">
+          <button data-tab="console" class="on">Console <i id="nConsole"></i></button>
+          <button data-tab="network">Network <i id="nNet"></i></button>
+          <button data-tab="lint">Lint <i id="nLint"></i></button>
+          <button data-tab="compile">Compile</button>
+          <button data-tab="data">Mock data</button>
+          <button data-tab="deploy">Deploy to BP</button>
+          <span class="grow"></span>
+          <button id="clearBtn" class="ghost">Clear</button>
+          <button id="reloadBtn" class="ghost">Reload widget</button>
+        </nav>
+        <div id="pane" class="pane"></div>
+      </div>
+    </section>
+  </main>
+  <script src="/ui/app.js"></script>
+</body>
+</html>

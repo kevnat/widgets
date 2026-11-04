@@ -1,0 +1,5 @@
+{
+  "kind": "PAGE",
+  "version": "v2",
+  "description": "V2 page widget: launches the BillingPlatform Hosted Payment Page (HPP) for a Billing Profile and amount, using an HPP Config Profile"
+}

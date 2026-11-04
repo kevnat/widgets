@@ -1,0 +1,62 @@
+{
+  "context": {
+    "nodeKey": "1001",
+    "nodeName": "Account",
+    "entity": "ACCOUNT",
+    "mode": "R",
+    "sampleName": "Northwind Traders"
+  },
+  "entities": {
+    "Account": [
+      {
+        "Id": "1001",
+        "Name": "Northwind Traders",
+        "Status": "ACTIVE"
+      },
+      {
+        "Id": "1002",
+        "Name": "Contoso Ltd",
+        "Status": "INACTIVE"
+      },
+      {
+        "Id": "9999",
+        "Name": "Empty Account",
+        "Status": "ACTIVE"
+      }
+    ],
+    "Invoice": [
+      {
+        "Id": "5001",
+        "AccountId": "1001",
+        "Status": "OPEN",
+        "TotalAmount": 1250.5,
+        "DueDate": "2026-11-15",
+        "DueAmount": 1250.5
+      },
+      {
+        "Id": "5002",
+        "AccountId": "1001",
+        "Status": "PAID",
+        "TotalAmount": 800,
+        "DueDate": "2026-10-15",
+        "DueAmount": 0
+      },
+      {
+        "Id": "5003",
+        "AccountId": "1001",
+        "Status": "OPEN",
+        "TotalAmount": 310.25,
+        "DueDate": "2026-09-30",
+        "DueAmount": 310.25
+      },
+      {
+        "Id": "5004",
+        "AccountId": "1002",
+        "Status": "OPEN",
+        "TotalAmount": 99,
+        "DueDate": "2026-11-01",
+        "DueAmount": 99
+      }
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "context": { "nodeKey": "5001", "nodeName": "Payment", "entity": "PAYMENT", "mode": "R", "orgName": "demo_org" },
+  "queries": [
+    { "match": "LOCKBOX_RECORD", "rows": [ { "LockboxUploadHistoryId": "88", "Created": "2026-10-02T14:30:00", "LockboxFile": "lockbox_20261002.csv" } ] }
+  ]
+}

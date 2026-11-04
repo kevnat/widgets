@@ -1,0 +1,6 @@
+{
+  "kind": "PAGE",
+  "version": "v1",
+  "entity": "INVOICE",
+  "description": "V1 JSX page widget: bound form, EmbeddedList, dialog, error handling (BPUI tag library)"
+}

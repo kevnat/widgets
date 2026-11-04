@@ -1,0 +1,8 @@
+{
+  "listRows": [
+    { "InvoiceNumber": "INV-1001", "Status": "OPEN", "DueDate": "2026-11-15" },
+    { "InvoiceNumber": "INV-1000", "Status": "PAID", "DueDate": "2026-10-15" },
+    { "InvoiceNumber": "INV-0999", "Status": "OPEN", "DueDate": "2026-09-30" },
+    { "InvoiceNumber": "INV-0998", "Status": "VOID", "DueDate": "2026-08-30" }
+  ]
+}

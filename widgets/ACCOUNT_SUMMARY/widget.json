@@ -1,0 +1,6 @@
+{
+  "kind": "EXTENSION",
+  "version": "v2",
+  "entity": "ACCOUNT",
+  "description": "V2 extension panel: account header, open balance and recent invoices (BPUI.Tools.API)"
+}

@@ -1,0 +1,20 @@
+{
+  "context": { "nodeKey": "5001", "nodeName": "Invoice", "entity": "INVOICE", "mode": "E" },
+  "entities": {
+    "Invoice": [
+      { "Id": "5001", "AccountId": "1001", "InvoiceNumber": "INV-1001", "Status": "OPEN", "DueDate": "2026-11-15", "Notes": "Net 30", "TotalAmount": "1250.50" }
+    ],
+    "Activity": [
+      { "Id": "7001", "InvoiceId": "5001", "ProductId": "Platform subscription", "Quantity": 1, "Rate": 1000, "RatedAmount": 1000 },
+      { "Id": "7002", "InvoiceId": "5001", "ProductId": "API overage", "Quantity": 501, "Rate": 0.5, "RatedAmount": 250.5 }
+    ],
+    "BillingProfile": [
+      { "Id": "3001", "AccountId": "1001", "Name": "Northwind - Primary", "Email": "ap@northwind.example", "Currency": "USD" }
+    ]
+  },
+  "meta": {
+    "Invoice": {
+      "Status": { "label": "Status", "type": "SELECT1", "options": ["OPEN", "PAID", "VOID"] }
+    }
+  }
+}

@@ -1,0 +1,36 @@
+<BPUI.Page name="invoiceReview">
+  <BPUI.FormLayout submitAction={save} cancelAction={cancel}>
+    <BPUI.Divider>Invoice</BPUI.Divider>
+    <BPUI.Panel style={{ width: 760 }}>
+      <BPUI.Message name="invoiceMessages" />
+      <BPUI.InputField variable={invoice} field="InvoiceNumber" label="Invoice Number" required={true} />
+      <BPUI.InputField variable={invoice} field="Status" label="Status" onUpdate={statusChanged} />
+      <BPUI.InputField variable={invoice} field="DueDate" label="Due Date" type="DATE_SELECTOR" />
+      <BPUI.InputField variable={invoice} field="Notes" label="Notes" type="TEXTAREA" />
+      <BPUI.OutputField variable={invoice} field="TotalAmount" label="Total" displayTransform={money} />
+    </BPUI.Panel>
+    <BPUI.Divider>Line items</BPUI.Divider>
+    <BPUI.Panel style={{ width: 760 }}>
+      <BPUI.PanelRow>
+        <BPUI.PanelRowColumn colSpan="4">
+          <BPUI.EmbeddedList variable={activities} name="activities" width="100%" canAdd={true} onAdd={addLine} onCellBlur={recalc}>
+            <BPUI.TableColumn name="ProductId" index="1" label="Product" />
+            <BPUI.TableColumn name="Quantity" index="2" label="Qty" />
+            <BPUI.TableColumn name="Rate" index="3" label="Rate" />
+            <BPUI.TableColumn name="RatedAmount" index="4" label="Amount" editable={false} displayTransform={money} />
+          </BPUI.EmbeddedList>
+        </BPUI.PanelRowColumn>
+      </BPUI.PanelRow>
+    </BPUI.Panel>
+    <BPUI.Button title="View billing profile" onClick={showProfile} />
+    <BPUI.Dialog name="profileDialog">
+      <BPUI.PopupForm>
+        <BPUI.Panel style={{ width: "100%" }}>
+          <BPUI.OutputField variable={profile} field="Name" label="Profile" />
+          <BPUI.OutputField variable={profile} field="Email" label="Email" />
+          <BPUI.OutputField variable={profile} field="Currency" label="Currency" />
+        </BPUI.Panel>
+      </BPUI.PopupForm>
+    </BPUI.Dialog>
+  </BPUI.FormLayout>
+</BPUI.Page>
