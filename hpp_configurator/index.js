@@ -14,9 +14,11 @@ const CONFIG = {
 const NOTE_OPTIONS = ['create-only', 'always', 'never'];
 const noteMode = (v) => (NOTE_OPTIONS.indexOf(v) >= 0 ? v : 'never');
 
-const STORAGE_KEY = 'ccc_hpp.settings';
+const STORAGE_KEY = 'hpp_configurator.settings';
+const LEGACY_STORAGE_KEY = 'ccc_hpp.settings';
 const readSaved = () => {
-  try { return JSON.parse(window.localStorage.getItem(STORAGE_KEY)) || {}; } catch (e) { return {}; }
+  /* Falls back to the settings saved under the widget's previous name (ccc_hpp) so a rename does not reset them. */
+  try { return JSON.parse(window.localStorage.getItem(STORAGE_KEY) || window.localStorage.getItem(LEGACY_STORAGE_KEY)) || {}; } catch (e) { return {}; }
 };
 const writeSaved = (v) => {
   try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(v)); } catch (e) { /* storage blocked: values just are not remembered */ }
@@ -161,7 +163,18 @@ const downloadText = (name, text) => {
   a.remove();
 };
 
-const CONTAINER_ID = 'ccc-hpp-container';
+/* Account search. BillableBillingProfileId is the profile the account is billed through (its own, or its parent's). */
+const sqlText = (v) => String(v).replace(/'/g, "''").replace(/[\r\n]+/g, ' ').slice(0, 60);
+const accountSql = (term) => {
+  const t = sqlText(term.trim());
+  return "SELECT a.Id, a.Name, a.BillableBillingProfileId, bp.CurrencyCode, bp.Status AS BpStatus FROM ACCOUNT a LEFT JOIN BILLING_PROFILE bp ON bp.Id = a.BillableBillingProfileId WHERE UPPER(a.Status) = 'ACTIVE' AND (UPPER(a.Name) LIKE UPPER('%" + t + "%') OR TO_CHAR(a.Id) = '" + t + "') AND ROWNUM <= 25";
+};
+const toAccount = (r) => ({
+  id: String(r.Id), name: r.Name, bpId: r.BillableBillingProfileId ? String(r.BillableBillingProfileId) : '', currency: r.CurrencyCode || '',
+  usable: !!r.BillableBillingProfileId && (!r.BpStatus || String(r.BpStatus).toUpperCase() === 'ACTIVE'),
+});
+
+const CONTAINER_ID = 'hpp-configurator-container';
 
 /* The token call must stay same-origin (BP itself, or the harness proxy); only the HPP library's own API calls use CONFIG.apiUrl. */
 const tokenUrl = () => window.location.origin + '/' + BPSystem.organization + '/hostedPayments/1.0/authenticate-session';
@@ -200,16 +213,28 @@ const getHppSecurityToken = async () => {
   return token;
 };
 
+/* The access token is a JWT whose claims include environmentId; read it from there instead of asking the user. */
+const tokenClaims = (token) => {
+  try {
+    const part = String(token).split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(part + '='.repeat((4 - (part.length % 4)) % 4)));
+  } catch (e) { return {}; }
+};
+
 const errorText = (e) => (e && (e.errorMessage || e.message)) || (typeof e === 'string' ? e : 'Payment failed');
 
-const CccHpp = ({ _widgetProps }) => {
+const HppConfigurator = ({ _widgetProps }) => {
   const saved = React.useMemo(readSaved, []);
   const initialProfile = saved.profileId || BPUI.Tools.getNodeKey() || '';
   const [profileId, setProfileId] = React.useState(String(initialProfile));
+  const [account, setAccount] = React.useState(saved.account || null);
+  const [acctQuery, setAcctQuery] = React.useState(saved.account ? saved.account.name : '');
+  const [acctState, setAcctState] = React.useState({ loading: false, results: [], open: false, error: '' });
   const [amount, setAmount] = React.useState(String(CONFIG.defaultAmount));
   const [gatewayKey, setGatewayKey] = React.useState(saved.gatewayKey || '');
   const [gateways, setGateways] = React.useState({ loading: true, options: [] });
   const [environmentId, setEnvironmentId] = React.useState(saved.environmentId || CONFIG.environmentId);
+  const [envAuto, setEnvAuto] = React.useState('');
   const [currencyCode, setCurrencyCode] = React.useState(saved.currencyCode || CONFIG.currencyCode);
   const [showNote, setShowNote] = React.useState(noteMode(saved.showNoteField || CONFIG.showNoteField));
   const [style, setStyle] = React.useState(Object.assign({}, DEFAULT_STYLE, saved.style, { vars: Object.assign({}, saved.style && saved.style.vars) }));
@@ -221,16 +246,54 @@ const CccHpp = ({ _widgetProps }) => {
   const [status, setStatus] = React.useState({ phase: 'idle' });
 
   React.useEffect(() => {
-    writeSaved({ profileId, gatewayKey, environmentId, currencyCode, showNoteField: showNote, style, autoApply, styleOpen });
-  }, [profileId, gatewayKey, environmentId, currencyCode, showNote, style, autoApply, styleOpen]);
+    writeSaved({ profileId, account, gatewayKey, environmentId, currencyCode, showNoteField: showNote, style, autoApply, styleOpen });
+  }, [profileId, account, gatewayKey, environmentId, currencyCode, showNote, style, autoApply, styleOpen]);
 
   const resetSaved = () => {
     clearSaved();
     setGatewayKey(gateways.options.length ? gateways.options[0].key : '');
     setEnvironmentId(CONFIG.environmentId);
     setProfileId(String(BPUI.Tools.getNodeKey() || ''));
+    setAccount(null);
+    setAcctQuery('');
     setCurrencyCode(CONFIG.currencyCode);
     setShowNote(noteMode(CONFIG.showNoteField));
+  };
+
+  /* On visit, mint a token once just to learn the environment id. An explicit Environment Id (settings) overrides it. */
+  React.useEffect(() => {
+    let active = true;
+    getHppSecurityToken()
+      .then((t) => { const id = tokenClaims(t).environmentId; if (active && id) setEnvAuto(String(id)); })
+      .catch(() => { /* not reachable (e.g. mock mode): the field stays available as a manual override */ });
+    return () => { active = false; };
+  }, []);
+
+  /* Type-ahead account search (2+ characters, debounced). Skipped when the text is just the selected account's name. */
+  React.useEffect(() => {
+    const term = acctQuery.trim();
+    if (term.length < 2 || (account && account.name === term)) { setAcctState((st) => Object.assign({}, st, { loading: false, results: [], open: false })); return undefined; }
+    let active = true;
+    setAcctState((st) => Object.assign({}, st, { loading: true, error: '' }));
+    const t = setTimeout(() => {
+      BPUI.Tools.API.requestQuery(BPUI.Tools.API.trimQuery(accountSql(term)), { on404: () => [] })
+        .then((r) => { if (active) setAcctState({ loading: false, results: ((r && r.data) || []).map(toAccount), open: true, error: '' }); })
+        .catch((e) => { if (active) setAcctState({ loading: false, results: [], open: true, error: (e && e.message) || 'Account search failed' }); });
+    }, 350);
+    return () => { active = false; clearTimeout(t); };
+  }, [acctQuery]);
+
+  const pickAccount = (a) => {
+    if (!a.usable) return;
+    setAccount(a);
+    setAcctQuery(a.name);
+    setProfileId(a.bpId);
+    setAcctState({ loading: false, results: [], open: false, error: '' });
+  };
+  const clearAccount = () => { setAccount(null); setAcctQuery(''); setAcctState({ loading: false, results: [], open: false, error: '' }); };
+  const onProfileIdChange = (v) => {
+    setProfileId(v);
+    if (account && v.trim() !== account.bpId) { setAccount(null); setAcctQuery(''); }
   };
 
   React.useEffect(() => {
@@ -258,9 +321,10 @@ const CccHpp = ({ _widgetProps }) => {
         await loadHppScript();
         const securityToken = await getHppSecurityToken();
         if (!active) return;
+        if (!request.environmentId && !tokenClaims(securityToken).environmentId) throw new Error('Could not determine the Environment Id from the token. Enter it under the Environment Id override.');
         HostedPayments.renderPaymentForm(Object.assign({
           securityToken,
-          environmentId: request.environmentId,
+          environmentId: request.environmentId || String(tokenClaims(securityToken).environmentId || ''),
           currencyCode: request.currencyCode,
           apiUrl: hppApiUrl(),
           billingProfileId: request.profileId,
@@ -293,7 +357,7 @@ const CccHpp = ({ _widgetProps }) => {
 
   const amountNum = Number(amount);
   const selected = gateways.options.find((o) => o.key === gatewayKey);
-  const problem = !profileId.trim() ? 'Enter a Billing Profile Id.' : !(amountNum > 0) ? 'Enter an amount greater than 0.' : !selected ? 'No active payment gateway is selected.' : !environmentId.trim() ? 'Enter the Environment Id.' : '';
+  const problem = !profileId.trim() ? 'Pick an account or enter a Billing Profile Id.' : !(amountNum > 0) ? 'Enter an amount greater than 0.' : !selected ? 'No active payment gateway is selected.' : '';
 
   const setVars = (vars, value) => setStyle((st) => {
     const next = Object.assign({}, st.vars);
@@ -309,8 +373,8 @@ const CccHpp = ({ _widgetProps }) => {
     }
     const cfg = {
       securityToken: RAW('securityToken'),
-      environmentId: environmentId.trim(),
-      currencyCode: (selected && selected.currency) || currencyCode.trim() || 'USD',
+      environmentId: environmentId.trim() || envAuto,
+      currencyCode: (selected && selected.currency) || (account && account.currency) || currencyCode.trim() || 'USD',
       apiUrl: RAW('HPP_API_URL'),
       billingProfileId: profileId.trim(),
       paymentGateways: selected ? selected.gateways : {},
@@ -337,7 +401,7 @@ const CccHpp = ({ _widgetProps }) => {
   const submit = (e) => {
     e.preventDefault();
     if (problem) { setStatus({ phase: 'error', message: problem }); return; }
-    setRequest({ profileId: profileId.trim(), amount: amountNum, gateways: selected.gateways, environmentId: environmentId.trim(), currencyCode: selected.currency || currencyCode.trim() || 'USD', showNoteField: showNote, style: styleProps, n: Date.now() });
+    setRequest({ profileId: profileId.trim(), amount: amountNum, gateways: selected.gateways, environmentId: environmentId.trim(), currencyCode: selected.currency || (account && account.currency) || currencyCode.trim() || 'USD', showNoteField: showNote, style: styleProps, n: Date.now() });
   };
 
   const field = (label, value, set, extra) => (
@@ -439,8 +503,27 @@ const CccHpp = ({ _widgetProps }) => {
       <details className="hpp-panel" open>
         <summary className="hpp-panel-title">Payment settings</summary>
         <div className="hpp-panel-body">
-          <form id="ccc-hpp-form" className="hpp-form-row" onSubmit={submit}>
-            {field('Billing Profile Id', profileId, setProfileId, { placeholder: 'e.g. 1001' })}
+          <form id="hpp-configurator-form" className="hpp-form-row" onSubmit={submit}>
+            <div className="hpp-field hpp-field-wide hpp-search">
+              <span className="hpp-label">Account (search by name or Id)</span>
+              <input className="hpp-input" value={acctQuery} placeholder="Start typing an account name"
+                onChange={(e) => { setAcctQuery(e.target.value); if (account && e.target.value.trim() !== account.name) setAccount(null); }}
+                onFocus={() => { if (acctState.results.length) setAcctState((st) => Object.assign({}, st, { open: true })); }} autoComplete="off" />
+              {account && <span className="hpp-hint">Billing profile {account.bpId}{account.currency ? ' (' + account.currency + ')' : ''} <button type="button" className="hpp-link" onClick={clearAccount}>clear</button></span>}
+              {acctState.loading && <span className="hpp-hint">Searching...</span>}
+              {acctState.open && (
+                <ul className="hpp-results">
+                  {acctState.error && <li className="hpp-result-msg hpp-error">{acctState.error}</li>}
+                  {!acctState.error && !acctState.results.length && <li className="hpp-result-msg">No matching active accounts</li>}
+                  {acctState.results.map((a) => (
+                    <li key={a.id} className={'hpp-result' + (a.usable ? '' : ' off')} onMouseDown={(e) => { e.preventDefault(); pickAccount(a); }}>
+                      {a.name} <span className="hpp-hint">#{a.id}{a.usable ? '' : ' - no active billing profile'}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {field('Billing Profile Id (optional)', profileId, onProfileIdChange, { placeholder: 'or set by the account' })}
             {field('Amount', amount, setAmount, { placeholder: '0.00', inputMode: 'decimal' })}
             <label className="hpp-field hpp-field-wide">
               <span className="hpp-label">Payment gateway</span>
@@ -450,7 +533,7 @@ const CccHpp = ({ _widgetProps }) => {
                 {gateways.options.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
               </select>
             </label>
-            {field('Environment Id', environmentId, setEnvironmentId)}
+            {field('Environment Id (auto-detected)', environmentId, setEnvironmentId, { placeholder: envAuto || 'detecting...', title: 'Read from the security token. Type a value only to override it.' })}
             {field('Fallback currency', currencyCode, setCurrencyCode, { title: 'Used when the selected gateway profile has no currency' })}
             <label className="hpp-field">
               <span className="hpp-label">Note field</span>
@@ -470,7 +553,7 @@ const CccHpp = ({ _widgetProps }) => {
       <div className="hpp-card">
         <div className="hpp-card-head">
           <h3 className="hpp-title">Make a payment</h3>
-          <button type="submit" form="ccc-hpp-form" className="hpp-btn" disabled={status.phase === 'loading'}>{request ? 'Reload payment form' : 'Load payment form'}</button>
+          <button type="submit" form="hpp-configurator-form" className="hpp-btn" disabled={status.phase === 'loading'}>{request ? 'Reload payment form' : 'Load payment form'}</button>
         </div>
         {status.phase === 'loading' && <div className="hpp-muted">Loading payment form...</div>}
         {status.phase === 'error' && <div className="hpp-error">{status.message}</div>}
@@ -482,4 +565,4 @@ const CccHpp = ({ _widgetProps }) => {
   );
 };
 
-export default CccHpp;
+export default HppConfigurator;

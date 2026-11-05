@@ -1,0 +1,57 @@
+{
+  "context": {
+    "nodeKey": "1001",
+    "nodeName": "Billing Profile",
+    "entity": "BILLING_PROFILE",
+    "mode": "R"
+  },
+  "queries": [
+    {
+      "match": "PAYMENT_GATEWAY_PROFILE",
+      "rows": [
+        {
+          "Id": "40",
+          "ProfileName": "Profile1",
+          "Currency": "USD",
+          "DefaultFlag": "1",
+          "GATEWAY_NAME": "BPPay_CC",
+          "GATEWAY_TYPE": "CREDIT CARD"
+        },
+        {
+          "Id": "41",
+          "ProfileName": "Profile1",
+          "Currency": "USD",
+          "DefaultFlag": "1",
+          "GATEWAY_NAME": "BPPay_DD",
+          "GATEWAY_TYPE": "ACH"
+        }
+      ]
+    },
+    {
+      "match": "FROM ACCOUNT",
+      "rows": [
+        {
+          "Id": "71085",
+          "Name": "#11406 Account 69980f11 TEST",
+          "BillableBillingProfileId": "65006",
+          "CurrencyCode": "USD",
+          "BpStatus": "ACTIVE"
+        },
+        {
+          "Id": "71088",
+          "Name": "#11426 Account",
+          "BillableBillingProfileId": "65009",
+          "CurrencyCode": "USD",
+          "BpStatus": "ACTIVE"
+        },
+        {
+          "Id": "71999",
+          "Name": "Account without a profile",
+          "BillableBillingProfileId": null,
+          "CurrencyCode": null,
+          "BpStatus": null
+        }
+      ]
+    }
+  ]
+}

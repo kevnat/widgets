@@ -116,6 +116,14 @@ async function handleApi(req, res, url) {
     try { return send(res, 200, bp.setWrites(body.enabled)); } catch (e) { return send(res, 400, { error: e.message }); }
   }
 
+  m = /^\/api\/widget-status\/([^/]+)$/.exec(p);
+  if (m && req.method === 'GET') {
+    const w = payload(decodeURIComponent(m[1]));
+    if (!w) return send(res, 404, { error: 'No such widget' });
+    if (!bp.publicState().connected) return send(res, 400, { error: 'Not connected to a BP instance' });
+    try { return send(res, 200, await bp.widgetStatus(w.meta.token)); } catch (e) { return send(res, 502, { error: e.message }); }
+  }
+
   m = /^\/api\/deploy\/([^/]+)$/.exec(p);
   if (m && req.method === 'POST') {
     const body = JSON.parse((await readBody(req)) || '{}');

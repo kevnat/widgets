@@ -53,3 +53,11 @@
 .hpp-style .hpp-panel-body { container-type: inline-size; }
 @container (min-width: 580px) { .hpp-group-wide { grid-column: span 2; } }
 @container (min-width: 880px) { .hpp-group-tall { grid-row: span 2; } .hpp-group-wide { grid-column: span 3; } }
+.hpp-search { position: relative; }
+.hpp-hint { font-size: 12px; color: #66727f; }
+.hpp-results { position: absolute; z-index: 20; left: 0; right: 0; top: 100%; margin: 2px 0 0; padding: 0; list-style: none; max-height: 240px; overflow: auto; background: #fff; border: 1px solid #c8ccd0; border-radius: 4px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12); }
+.hpp-result, .hpp-result-msg { padding: 6px 10px; font-size: 13px; }
+.hpp-result { cursor: pointer; }
+.hpp-result:hover { background: #eef3fb; }
+.hpp-result.off { color: #999; cursor: default; }
+.hpp-result.off:hover { background: none; }

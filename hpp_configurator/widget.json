@@ -1,0 +1,5 @@
+{
+  "kind": "PAGE",
+  "version": "v2",
+  "description": "HPP Configurator - V2 page widget: launches the BillingPlatform Hosted Payment Page (HPP) for a Billing Profile and amount, using the org's active gateways, with a styling panel and code export"
+}

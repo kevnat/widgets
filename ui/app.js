@@ -145,9 +145,10 @@
     const D = S.deploy;
     const d = S.detail;
     const lintErrors = ((d && d.lint) || []).filter((l) => l.severity === 'error').length;
-    const host = el('input', { type: 'text', id: 'dHost', placeholder: c.host || 'connect first', autocomplete: 'off' });
-    const enable = el('input', { type: 'checkbox', id: 'dEnable' });
-    const force = el('input', { type: 'checkbox', id: 'dForce' });
+    /* Form values live in S.deploy so the pane can be redrawn (busy state, results) without wiping what was typed. */
+    const host = el('input', { type: 'text', id: 'dHost', placeholder: c.host || 'connect first', autocomplete: 'off', value: D.host || '', oninput: (e) => { D.host = e.target.value; } });
+    const enable = el('input', { type: 'checkbox', id: 'dEnable', checked: D.enable ? 'checked' : false, onchange: (e) => { D.enable = e.target.checked; } });
+    const force = el('input', { type: 'checkbox', id: 'dForce', checked: D.force ? 'checked' : false, onchange: (e) => { D.force = e.target.checked; } });
     const go = el('button', { class: 'primary', onclick: doDeploy }, D.busy ? 'Deploying...' : 'Push to WIDGET and compile');
     go.disabled = D.busy || !c.connected || !c.writes;
     pane.replaceChildren(el('div', { class: 'deploy' },
@@ -159,15 +160,30 @@
       go,
       D.steps.length ? el('ol', {}, D.steps.map((s) => el('li', {}, s))) : '',
       D.error ? el('div', { class: 'err' }, D.error) : '',
-      D.result ? el('div', {}, el('p', { class: D.result.status === 'PROCESSED' ? 'ok' : 's5' }, 'WIDGET ' + D.result.id + ' -> ' + D.result.status + (D.result.version ? ' (v' + D.result.version + ')' : '')), D.result.errorMessage ? el('pre', { class: 'detail' }, D.result.errorMessage) : '') : '',
+      D.result ? el('div', {},
+        el('p', { class: D.result.status === 'PROCESSED' ? 'ok' : D.result.status === 'PENDING' ? 'hint' : 's5' }, 'WIDGET ' + D.result.id + ' -> ' + D.result.status + (D.result.version ? ' (v' + D.result.version + ')' : '') + (D.result.status === 'PENDING' ? ' - still compiling in BP, this is not a failure' : '')),
+        D.result.finished === false || D.result.status === 'PENDING' ? el('button', { onclick: checkStatus }, D.checking ? 'Checking...' : 'Check status') : '',
+        D.result.errorMessage ? el('pre', { class: 'detail' }, D.result.errorMessage) : '') : '',
       el('p', { class: 'hint' }, 'Still manual after PROCESSED: EnabledFlag, wiring (Buttons and Actions / EXTENSION_WIDGET field / List layout / entity Page lookup) and role access (WIDGET_ROLE etc). Hard-refresh BP after a recompile.')));
+  }
+
+  async function checkStatus() {
+    const D = S.deploy;
+    D.checking = true; renderPane();
+    try {
+      const r = await api('/api/widget-status/' + encodeURIComponent(S.name));
+      if (r.found) { D.result = Object.assign({}, D.result, r); D.error = null; } else { D.error = 'Widget not found in BP'; }
+    } catch (e) { D.error = e.message; }
+    D.checking = false; renderPane();
   }
 
   async function doDeploy() {
     const D = S.deploy;
+    /* Read the form BEFORE redrawing: renderPane() rebuilds the inputs. */
+    const body = { confirm: (D.host || '').trim(), enable: D.enable ? true : undefined, force: !!D.force };
     D.busy = true; D.steps = ['Sending...']; D.error = null; D.result = null; renderPane();
     try {
-      const r = await api('/api/deploy/' + encodeURIComponent(S.name), { method: 'POST', body: JSON.stringify({ confirm: $('dHost').value.trim(), enable: $('dEnable').checked ? true : undefined, force: !!($('dForce') && $('dForce').checked) }) });
+      const r = await api('/api/deploy/' + encodeURIComponent(S.name), { method: 'POST', body: JSON.stringify(body) });
       D.steps = r.steps; D.result = r.result;
     } catch (e) {
       D.steps = (e.data && e.data.steps) || []; D.error = e.message + (e.data && e.data.lint ? ' - ' + e.data.lint.map((l) => l.message).join(' | ') : '');
